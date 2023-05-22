@@ -100,6 +100,7 @@ void INIT() {
   attachInterrupt(digitalPinToInterrupt(enca[1]), readEncoder<1>, RISING);
   Serial.println("target pos");
   gyro_sensitivity(0x10);
+  calculate_IMU_error();
 }
 
 void setup() {
@@ -117,6 +118,7 @@ void setup() {
 
 void loop() {
   //zigzag();
+  forward();
 }
 void setMotor(int dir, int pwmVal, int pwm, int in1, int in2) {
   analogWrite(pwm, pwmVal);
@@ -232,8 +234,7 @@ void forward() {
   digitalWrite(in2[1], LOW);
   digitalWrite(in1[0], HIGH);
   digitalWrite(in2[0], LOW);
-  analogWrite(pwm[0], 180);
-  analogWrite(pwm[1], 180);
+  straight();
 }
 
 void backward() {
@@ -312,7 +313,7 @@ void calculate_IMU_error() {
     GyroY = Wire.read() << 8 | Wire.read();
     GyroZ = Wire.read() << 8 | Wire.read();
     // Sum all readings
-    GyroErrorX = GyroErrorX + (GyroX / 32.8);
+    GyroErrorX = GyroErrorX + (GyroX / 32.8); // 32.8 ==> sensitivity = 1000 dps
     GyroErrorY = GyroErrorY + (GyroY / 32.8);
     GyroErrorZ = GyroErrorZ + (GyroZ / 32.8);
     c++;
@@ -519,28 +520,26 @@ void readYawFiltered() {
   filtered_yaw = filtered_yaw / 200;
   yaw = filtered_yaw;
 }
-void straight()
-{
+void straight() {
   pid[0].setParams(2, 1, 0.5, 255);
   pid[1].setParams(2, 1, 0.5, 255);
   float target = 0;
-  while (1) {
-    readYaw();
-    long currT = micros();
-    float deltaT = ((float)(currT - prevT)) / (1.0e6);
-    prevT = currT;
-    
-    int pwr[2], dir[2];
-    pid[0].evalu(yaw, target, deltaT, pwr[0], dir[0]);
-    pwr[0] = constrain(motorSpeedMin+pwr[0], motorSpeedMin, motorSpeedMax);
-    setMotor(1, pwr[0], pwm[0], in1[0], in2[0]);
-    pid[1].evalu(yaw, target, deltaT, pwr[1], dir[1]);
-    pwr[1] = constrain(motorSpeedMin-pwr[1], motorSpeedMin, motorSpeedMax);
-    setMotor(1, pwr[1], pwm[1], in1[1], in2[1]);
-    
-    Serial.print(target);
-    Serial.print(" ");
-    Serial.print(yaw);
-    Serial.print(" ");
-    Serial.println();
+  readYaw();
+  long currT = micros();
+  float deltaT = ((float)(currT - prevT)) / (1.0e6);
+  prevT = currT;
+
+  int pwr[2], dir[2];
+  pid[0].evalu(yaw, target, deltaT, pwr[0], dir[0]);
+  pwr[0] = constrain(motorSpeedMin + pwr[0], motorSpeedMin, motorSpeedMax);
+  setMotor(1, pwr[0], pwm[0], in1[0], in2[0]);
+  pid[1].evalu(yaw, target, deltaT, pwr[1], dir[1]);
+  pwr[1] = constrain(motorSpeedMin - pwr[1], motorSpeedMin, motorSpeedMax);
+  setMotor(1, pwr[1], pwm[1], in1[1], in2[1]);
+
+  Serial.print(target);
+  Serial.print(" ");
+  Serial.print(yaw);
+  Serial.print(" ");
+  Serial.println();
 }
